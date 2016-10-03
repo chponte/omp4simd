@@ -4,6 +4,8 @@
 # include <time.h>
 # include <omp.h>
 
+#define N 500
+
 int main ( void );
 void timestamp ( void );
 
@@ -30,14 +32,14 @@ int main ( void )
     John Burkardt
 */
 {
-  double a[500][500];
+  double *a = (double *) malloc(N*N*sizeof(double));
   double angle;
-  double b[500][500];
-  double c[500][500];
+  double *b = (double *) malloc(N*N*sizeof(double));
+  double *c = (double *) malloc(N*N*sizeof(double));
   int i;
   int j;
   int k;
-  int n = 500;
+  int n = N;
   double pi = 3.141592653589793;
   double s;
   int thread_num;
@@ -72,7 +74,7 @@ int main ( void )
     for ( j = 0; j < n; j++ )
     {
       angle = 2.0 * pi * i * j / ( double ) n;
-      a[i][j] = s * ( sin ( angle ) + cos ( angle ) );
+      a[i*n+j] = s * ( sin ( angle ) + cos ( angle ) );
     }
   }
 /*
@@ -83,7 +85,7 @@ int main ( void )
   {
     for ( j = 0; j < n; j++ )
     {
-      b[i][j] = a[i][j];
+      b[i*n+j] = a[i*n+j];
     }
   }
 /*
@@ -94,10 +96,10 @@ int main ( void )
   {
     for ( j = 0; j < n; j++ )
     {
-      c[i][j] = 0.0;
+      c[i*n+j] = 0.0;
       for ( k = 0; k < n; k++ )
       {
-        c[i][j] = c[i][j] + a[i][k] * b[k][j];
+        c[i*n+j] = c[i*n+j] + a[i*n+k] * b[k*n+j];
       }
     }
   }
@@ -105,10 +107,13 @@ int main ( void )
 }
   wtime = omp_get_wtime ( ) - wtime;
   printf ( "  Elapsed seconds = %g\n", wtime );
-  printf ( "  C(100,100)  = %g\n", c[99][99] );
 /*
   Terminate.
 */
+  free(a);
+  free(b);
+  free(c);
+
   printf ( "\n" );
   printf ( "MXM_OPENMP:\n" );
   printf ( "  Normal end of execution.\n" );
