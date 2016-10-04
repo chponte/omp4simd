@@ -3,15 +3,17 @@
 # include <math.h>
 # include <time.h>
 # include <omp.h>
+# include <string.h>
 
-#define N 500
+# define N 500
 
-int main ( void );
+int main ( int argc, char *argv[] );
 void timestamp ( void );
+void write_to_file(const int nwidth, double *array, char *outfile);
 
 /******************************************************************************/
 
-int main ( void )
+int main ( int argc, char *argv[] )
 
 /******************************************************************************/
 /*
@@ -25,11 +27,12 @@ int main ( void )
 
   Modified:
 
-    13 October 2011
+    4 October 2016
 
   Author:
 
     John Burkardt
+    Christian Ponte
 */
 {
   double *a = (double *) malloc(N*N*sizeof(double));
@@ -44,6 +47,7 @@ int main ( void )
   double s;
   int thread_num;
   double wtime;
+  char * outfile = NULL;
 
   timestamp ( );
 
@@ -59,6 +63,12 @@ int main ( void )
   printf ( "  The number of threads available    = %d\n", thread_num );
 
   printf ( "  The matrix order N                 = %d\n", n );
+
+  if (argc > 1){
+    outfile = (char *) malloc(sizeof(char) * strlen(argv[1]));
+    strcpy(outfile, argv[1]);
+  }
+
 /*
   Loop 1: Evaluate A.
 */
@@ -107,6 +117,13 @@ int main ( void )
 }
   wtime = omp_get_wtime ( ) - wtime;
   printf ( "  Elapsed seconds = %g\n", wtime );
+
+  if (outfile != NULL){
+    printf( "  Writting result to %s\n", outfile);
+    write_to_file(n, c, outfile);
+    free(outfile);
+  }
+
 /*
   Terminate.
 */
@@ -170,3 +187,49 @@ void timestamp ( void )
   return;
 # undef TIME_SIZE
 }
+/******************************************************************************/
+
+void write_to_file(const int nwidth, double *array, char *outfile)
+
+/******************************************************************************/
+/*
+  Purpose:
+
+    WRITE_TO_FILE writes the array ARRAY into the specified file in OUTFILE.
+
+  Licensing:
+
+    This code is distributed under the GNU LGPL license. 
+
+  Modified:
+
+    4 October 2016
+
+  Author:
+
+    Christian Ponte
+
+  Parameters:
+
+    Input, int nwidth, the size of the array.
+
+    Input, double *array, the input array.
+
+    Input, char *outfile, the output file name.
+*/
+{
+  int i,j;
+
+  FILE *f = fopen(outfile, "w");
+  if (f==NULL) return;
+
+  for (i=0; i<N; i++){
+    for (j=0; j<N; j++){
+      fprintf(f, "%f ", array[i*nwidth+j]);
+    }
+    fprintf(f, "\n");
+  }
+
+  fclose(f);
+}
+# undef N
