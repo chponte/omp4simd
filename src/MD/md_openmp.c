@@ -3,6 +3,9 @@
 # include <time.h>
 # include <math.h>
 # include <omp.h>
+# include <string.h>
+
+# define NP 1024
 
 int main ( int argc, char *argv[] );
 void compute ( int np, int nd, double pos[], double vel[], 
@@ -14,6 +17,8 @@ double r8_uniform_01 ( int *seed );
 void timestamp ( void );
 void update ( int np, int nd, double pos[], double vel[], double f[], 
   double acc[], double mass, double dt );
+void write_to_file(const int np, const int nd, int nppadded, double *acc,
+  double *force, double *pos, double *vel, char *outfile);
 
 /******************************************************************************/
 
@@ -41,12 +46,13 @@ int main ( int argc, char *argv[] )
 
   Modified:
 
-    30 July 2009
+    4 October 2016
 
   Author:
 
     Original FORTRAN77 version by Bill Magro.
     C version by John Burkardt.
+    OpenMP SIMD version by Christian Ponte.
 
   Parameters:
 
@@ -59,11 +65,10 @@ int main ( int argc, char *argv[] )
   double e0;
   double *force;
   int i;
-  int id;
   double kinetic;
   double mass = 1.0;
   int nd = 3;
-  int np = 1000;
+  int np = NP;
   double *pos;
   double potential;
   int proc_num;
@@ -75,6 +80,7 @@ int main ( int argc, char *argv[] )
   int step_print_num;
   double *vel;
   double wtime;
+  char * outfile = NULL;
 
   timestamp ( );
 
@@ -100,6 +106,11 @@ int main ( int argc, char *argv[] )
   printf ( "\n" );
   printf ( "  Number of processors available = %d\n", omp_get_num_procs ( ) );
   printf ( "  Number of threads =              %d\n", omp_get_max_threads ( ) );
+
+  if (argc > 1){
+    outfile = (char *) malloc(sizeof(char) * strlen(argv[1]));
+    strcpy(outfile, argv[1]);
+  }
 /*
   Set the dimensions of the box.
 */
@@ -168,6 +179,12 @@ int main ( int argc, char *argv[] )
   printf ( "\n" );
   printf ( "  Elapsed time for main computation:\n" );
   printf ( "  %f seconds.\n", wtime );
+
+  if (outfile != NULL){
+    printf( "  Writting result to %s\n", outfile);
+    write_to_file(np, nd, np, acc, force, pos, vel, outfile);
+    free(outfile);
+  }
 
   free ( acc );
   free ( box );
@@ -624,3 +641,21 @@ void update ( int np, int nd, double pos[], double vel[], double f[],
 
   return;
 }
+
+void write_to_file(const int np, const int nd, int nppadded, double *acc,
+  double *force, double *pos, double *vel, char *outfile){
+  int i,j;
+
+  FILE *f = fopen(outfile, "w");
+  if (f==NULL) return;
+
+  for (i=0; i<np; i++){
+    for (j=0; j<nd; j++){
+      fprintf(f, "%f %f %f %f\n",
+        acc[j*nppadded+i], force[j*nppadded+i], pos[j*nppadded+i], vel[j*nppadded+i]);
+    }
+  }
+
+  fclose(f);
+}
+# undef NP
