@@ -641,9 +641,48 @@ void update ( int np, int nd, double pos[], double vel[], double f[],
 
   return;
 }
+/******************************************************************************/
 
 void write_to_file(const int np, const int nd, int nppadded, double *acc,
-  double *force, double *pos, double *vel, char *outfile){
+  double *force, double *pos, double *vel, char *outfile)
+
+/******************************************************************************/
+/*
+  Purpose:
+
+    WRITE_TO_FILE writes the arrays ACC, FORCE, POS and VEL into the specified file in OUTFILE.
+
+  Licensing:
+
+    This code is distributed under the GNU LGPL license. 
+
+  Modified:
+
+    4 October 2016
+
+  Author:
+
+    Christian Ponte
+
+  Parameters:
+
+    Input, int np, the number of particles represented on the array.
+
+    Input, int nd, the number of dimensions for each particle represented in the array.
+
+    Input, int npadded, the padded horizontal dimension of the array.
+
+    Input, double *acc, the accelerations array.
+
+    Input, double *force, the forces array.
+
+    Input, double *pos, the positions array.
+
+    Input, double *vel, the velocities array.
+
+    Input, char *outfile, the output file name.
+*/
+{
   int i,j;
 
   FILE *f = fopen(outfile, "w");
