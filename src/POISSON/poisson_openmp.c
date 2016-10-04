@@ -3,6 +3,7 @@
 # include <math.h>
 # include <time.h>
 # include <omp.h>
+# include <string.h>
 
 #define NX 161
 #define NY 161
@@ -15,6 +16,7 @@ void sweep ( int nx, int ny, double dx, double dy, double *f,
 void timestamp ( void );
 double u_exact ( double x, double y );
 double uxxyy_exact ( double x, double y );
+void write_to_file(const int nx, const int ny, int npadded, double *u, char *outfile);
 
 /******************************************************************************/
 
@@ -89,6 +91,7 @@ int main ( int argc, char *argv[] )
   double wtime;
   double x;
   double y;
+  char *outfile = NULL;
 
   dx = 1.0 / ( double ) ( nx - 1 );
   dy = 1.0 / ( double ) ( ny - 1 );
@@ -122,6 +125,11 @@ int main ( int argc, char *argv[] )
   printf ( "  The number of interior Y grid points is %d\n", ny );
   printf ( "  The X grid spacing is %f\n", dx );
   printf ( "  The Y grid spacing is %f\n", dy );
+
+  if (argc > 1){
+    outfile = (char *) malloc(sizeof(char) * strlen(argv[1]));
+    strcpy(outfile, argv[1]);
+  }
 /*
   Set the right hand side array F.
 */
@@ -242,6 +250,12 @@ int main ( int argc, char *argv[] )
 /*
   Terminate.
 */
+  if (outfile != NULL){
+    printf( "  Writting result to %s\n", outfile);
+    write_to_file(nx, ny, nx, unew, outfile);
+    free(outfile);
+  }
+
   free(f);
   free(u);
   free(udiff);
@@ -613,6 +627,56 @@ double uxxyy_exact ( double x, double y )
 
   return value;
 }
+/******************************************************************************/
+
+void write_to_file(const int nx, const int ny, int npadded, double *u, char *outfile)
+
+/******************************************************************************/
+/*
+  Purpose:
+
+    WRITE_TO_FILE writes the array U into the specified file in OUTFILE.
+
+  Licensing:
+
+    This code is distributed under the GNU LGPL license. 
+
+  Modified:
+
+    4 October 2016
+
+  Author:
+
+    Christian Ponte
+
+  Parameters:
+
+    Input, int nx, the horizontal size of the array.
+
+    Input, int ny, the vertical size of the array.
+
+    Input, int npadded, the padded horizontal dimension of the array.
+
+    Input, double *u, the input array.
+
+    Input, char *outfile, the output file name.
+*/
+{
+  int i,j;
+
+  FILE *f = fopen(outfile, "w");
+  if (f==NULL) return;
+
+  for (i=0; i<NX; i++){
+    for (j=0; j<NY; j++){
+      fprintf(f, "%f ", u[i*npadded+j]);
+    }
+    fprintf(f, "\n");
+  }
+
+  fclose(f);
+}
+
 
 # undef NX
 # undef NY
