@@ -4,14 +4,14 @@
 # include <time.h>
 # include <omp.h>
 
-# define NX 161
-# define NY 161
+#define NX 161
+#define NY 161
 
 int main ( int argc, char *argv[] );
-double r8mat_rms ( int nx, int ny, double a[NX][NY] );
-void rhs ( int nx, int ny, double f[NX][NY] );
-void sweep ( int nx, int ny, double dx, double dy, double f[NX][NY], 
-  int itold, int itnew, double u[NX][NY], double unew[NX][NY] );
+double r8mat_rms ( int nx, int ny, double *a );
+void rhs ( int nx, int ny, double *f );
+void sweep ( int nx, int ny, double dx, double dy, double *f,
+  int itold, int itnew, double *u, double *unew );
 void timestamp ( void );
 double u_exact ( double x, double y );
 double uxxyy_exact ( double x, double y );
@@ -58,11 +58,12 @@ int main ( int argc, char *argv[] )
 
   Modified:
 
-    14 December 2011
+    4 October 2016
 
   Author:
 
     John Burkardt
+    Christian Ponte
 */
 {
   int converged;
@@ -70,22 +71,20 @@ int main ( int argc, char *argv[] )
   double dx;
   double dy;
   double error;
-  double f[NX][NY];
+  double *f = (double *) malloc(NX*NY*sizeof(double));
   int i;
   int id;
   int itnew;
   int itold;
   int j;
-  int jt;
-  int jt_max = 20;
   int nx = NX;
   int ny = NY;
   double tolerance = 0.000001;
-  double u[NX][NY];
+  double *u = (double *) malloc(NX*NY*sizeof(double));
   double u_norm;
-  double udiff[NX][NY];
-  double uexact[NX][NY];
-  double unew[NX][NY];
+  double *udiff = (double *) malloc(NX*NY*sizeof(double));
+  double *uexact = (double *) malloc(NX*NY*sizeof(double));
+  double *unew = (double *) malloc(NX*NY*sizeof(double));
   double unew_norm;
   double wtime;
   double x;
@@ -109,7 +108,7 @@ int main ( int argc, char *argv[] )
   id = omp_get_thread_num ( );
   if ( id == 0 )
   {
-    printf ( "  The maximum number of threads is %d\n", omp_get_num_threads ( ) ); 
+    printf ( "  The maximum number of threads is %d\n", omp_get_num_threads ( ) );
   }
 }
   printf ( "\n" );
@@ -137,11 +136,11 @@ int main ( int argc, char *argv[] )
     {
       if ( i == 0 || i == nx - 1 || j == 0 || j == ny - 1 )
       {
-        unew[i][j] = f[i][j];
+        unew[i*ny+j] = f[i*ny+j];
       }
       else
       {
-        unew[i][j] = 0.0;
+        unew[i*ny+j] = 0.0;
       }
     }
   }
@@ -155,7 +154,7 @@ int main ( int argc, char *argv[] )
     for ( i = 0; i < nx; i++ )
     {
       x = ( double ) ( i ) / ( double ) ( nx - 1 );
-      uexact[i][j] = u_exact ( x, y );
+      uexact[i*ny+j] = u_exact ( x, y );
     }
   }
   u_norm = r8mat_rms ( nx, ny, uexact );
@@ -173,7 +172,7 @@ int main ( int argc, char *argv[] )
   {
     for ( i = 0; i < nx; i++ )
     {
-      udiff[i][j] = unew[i][j] - uexact[i][j];
+      udiff[i*ny+j] = unew[i*ny+j] - uexact[i*ny+j];
     }
   }
   error = r8mat_rms ( nx, ny, udiff );
@@ -198,20 +197,22 @@ int main ( int argc, char *argv[] )
     u_norm = unew_norm;
     unew_norm = r8mat_rms ( nx, ny, unew );
 
+    # pragma omp parallel for shared(udiff, unew, u, nx, ny) private(i, j)
     for ( j = 0; j < ny; j++ )
     {
       for ( i = 0; i < nx; i++ )
       {
-        udiff[i][j] = unew[i][j] - u[i][j];
+        udiff[i*ny+j] = unew[i*ny+j] - u[i*ny+j];
       }
     }
     diff = r8mat_rms ( nx, ny, udiff );
 
+    # pragma omp parallel for shared(udiff, unew, uexact, nx, ny) private(i, j)
     for ( j = 0; j < ny; j++ )
     {
       for ( i = 0; i < nx; i++ )
       {
-        udiff[i][j] = unew[i][j] - uexact[i][j];
+        udiff[i*ny+j] = unew[i*ny+j] - uexact[i*ny+j];
       }
     }
     error = r8mat_rms ( nx, ny, udiff );
@@ -241,6 +242,12 @@ int main ( int argc, char *argv[] )
 /*
   Terminate.
 */
+  free(f);
+  free(u);
+  free(udiff);
+  free(uexact);
+  free(unew);
+
   printf ( "\n" );
   printf ( "POISSON_OPENMP:\n" );
   printf ( "  Normal end of execution.\n" );
@@ -251,7 +258,7 @@ int main ( int argc, char *argv[] )
 }
 /******************************************************************************/
 
-double r8mat_rms ( int nx, int ny, double a[NX][NY] )
+double r8mat_rms ( int nx, int ny, double *a )
 
 /******************************************************************************/
 /*
@@ -265,17 +272,18 @@ double r8mat_rms ( int nx, int ny, double a[NX][NY] )
 
   Modified:
 
-    01 March 2003
+    4 October 2016
 
   Author:
 
     John Burkardt
+    Christian Ponte
 
   Parameters:
 
     Input, int NX, NY, the number of rows and columns in A.
 
-    Input, double A[NX][NY], the vector.
+    Input, double *A, the vector.
 
     Output, double R8MAT_RMS, the root mean square of the entries of A.
 */
@@ -286,11 +294,12 @@ double r8mat_rms ( int nx, int ny, double a[NX][NY] )
 
   v = 0.0;
 
+  # pragma omp parallel for shared(a) private(j,i) reduction(+:v)
   for ( j = 0; j < ny; j++ )
   {
     for ( i = 0; i < nx; i++ )
     {
-      v = v + a[i][j] * a[i][j];
+      v = v + a[i*ny+j] * a[i*ny+j];
     }
   }
   v = sqrt ( v / ( double ) ( nx * ny )  );
@@ -299,7 +308,7 @@ double r8mat_rms ( int nx, int ny, double a[NX][NY] )
 }
 /******************************************************************************/
 
-void rhs ( int nx, int ny, double f[NX][NY] )
+void rhs ( int nx, int ny, double *f )
 
 /******************************************************************************/
 /*
@@ -331,21 +340,22 @@ void rhs ( int nx, int ny, double f[NX][NY] )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU LGPL license.
 
   Modified:
 
-    28 October 2011
+    4 October 2016
 
   Author:
 
     John Burkardt
+    Christian Ponte
 
   Parameters:
 
     Input, int NX, NY, the X and Y grid dimensions.
 
-    Output, double F[NX][NY], the initialized right hand side data.
+    Output, double *F, the initialized right hand side data.
 */
 {
   double fnorm;
@@ -365,11 +375,11 @@ void rhs ( int nx, int ny, double f[NX][NY] )
       x = ( double ) ( i ) / ( double ) ( nx - 1 );
       if ( i == 0 || i == nx - 1 || j == 0 || j == ny - 1 )
       {
-        f[i][j] = u_exact ( x, y );
+        f[i*ny+j] = u_exact ( x, y );
       }
       else
       {
-        f[i][j] = - uxxyy_exact ( x, y );
+        f[i*ny+j] = - uxxyy_exact ( x, y );
       }
     }
   }
@@ -382,8 +392,8 @@ void rhs ( int nx, int ny, double f[NX][NY] )
 }
 /******************************************************************************/
 
-void sweep ( int nx, int ny, double dx, double dy, double f[NX][NY], 
-  int itold, int itnew, double u[NX][NY], double unew[NX][NY] )
+void sweep ( int nx, int ny, double dx, double dy, double *f,
+  int itold, int itnew, double *u, double *unew )
 
 /******************************************************************************/
 /*
@@ -395,7 +405,7 @@ void sweep ( int nx, int ny, double dx, double dy, double f[NX][NY],
 
     Assuming DX = DY, we can approximate
 
-      - ( d/dx d/dx + d/dy d/dy ) U(X,Y) 
+      - ( d/dx d/dx + d/dy d/dy ) U(X,Y)
 
     by
 
@@ -403,20 +413,21 @@ void sweep ( int nx, int ny, double dx, double dy, double f[NX][NY],
 
     The discretization employed below will not be correct in the general
     case where DX and DY are not equal.  It's only a little more complicated
-    to allow DX and DY to be different, but we're not going to worry about 
+    to allow DX and DY to be different, but we're not going to worry about
     that right now.
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU LGPL license.
 
   Modified:
 
-    14 December 2011
+    4 October 2016
 
   Author:
 
     John Burkardt
+    Christian Ponte
 
   Parameters:
 
@@ -424,18 +435,18 @@ void sweep ( int nx, int ny, double dx, double dy, double f[NX][NY],
 
     Input, double DX, DY, the spacing between grid points.
 
-    Input, double F[NX][NY], the right hand side data.
+    Input, double *F, the right hand side data.
 
     Input, int ITOLD, the iteration index on input.
 
     Input, int ITNEW, the desired iteration index
     on output.
 
-    Input, double U[NX][NY], the solution estimate on 
+    Input, double *U, the solution estimate on
     iteration ITNEW-1.
 
-    Input/output, double UNEW[NX][NY], on input, the solution 
-    estimate on iteration ITOLD.  On output, the solution estimate on 
+    Input/output, double *UNEW, on input, the solution
+    estimate on iteration ITOLD.  On output, the solution estimate on
     iteration ITNEW.
 */
 {
@@ -455,7 +466,7 @@ void sweep ( int nx, int ny, double dx, double dy, double f[NX][NY],
     {
       for ( i = 0; i < nx; i++ )
       {
-        u[i][j] = unew[i][j];
+        u[i*ny+j] = unew[i*ny+j];
       }
     }
 /*
@@ -468,12 +479,12 @@ void sweep ( int nx, int ny, double dx, double dy, double f[NX][NY],
       {
         if ( i == 0 || j == 0 || i == nx - 1 || j == ny - 1 )
         {
-          unew[i][j] = f[i][j];
+          unew[i*ny+j] = f[i*ny+j];
         }
         else
-        { 
-          unew[i][j] = 0.25 * ( 
-            u[i-1][j] + u[i][j+1] + u[i][j-1] + u[i+1][j] + f[i][j] * dx * dy );
+        {
+          unew[i*ny+j] = 0.25 * (
+            u[(i-1)*ny+j] + u[i*ny+j+1] + u[i*ny+j-1] + u[(i+1)*ny+j] + f[i*ny+j] * dx * dy );
         }
       }
     }
@@ -497,7 +508,7 @@ void timestamp ( void )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU LGPL license.
 
   Modified:
 
@@ -554,7 +565,7 @@ double u_exact ( double x, double y )
 
     Input, double X, Y, the coordinates of a point.
 
-    Output, double U_EXACT, the value of the exact solution 
+    Output, double U_EXACT, the value of the exact solution
     at (X,Y).
 */
 {
@@ -591,7 +602,7 @@ double uxxyy_exact ( double x, double y )
 
     Input, double X, Y, the coordinates of a point.
 
-    Output, double UXXYY_EXACT, the value of 
+    Output, double UXXYY_EXACT, the value of
     ( d/dx d/dx + d/dy d/dy ) of the exact solution at (X,Y).
 */
 {
@@ -602,5 +613,6 @@ double uxxyy_exact ( double x, double y )
 
   return value;
 }
+
 # undef NX
 # undef NY
