@@ -10,5 +10,3 @@ CFLAGS=-mcmodel=medium -qopenmp -O2 -no-vec -mmic
 
 # Output directory
 ODIR=$(shell pwd)/bin
-
-
