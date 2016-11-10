@@ -5,7 +5,7 @@
 # include <omp.h>
 # include <string.h>
 
-# define N 500
+# define N 1024
 
 int main ( int argc, char *argv[] );
 void timestamp ( void );
