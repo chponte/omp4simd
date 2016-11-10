@@ -5,17 +5,27 @@
 # include <omp.h>
 # include <string.h>
 
+// Include appropiate library depending on compiler
+#if defined(__INTEL_COMPILER)
+#include <malloc.h>
+#else
+#include <mm_malloc.h>
+#endif
+
+# define ALIGNMENT 32
 # define NP 1024
 
 int main ( int argc, char *argv[] );
-void compute ( int np, int nd, double pos[], double vel[], 
+void compute ( int np, int nd, const int nppadded, double pos[], double vel[],
   double mass, double f[], double *pot, double *kin );
-double dist ( int nd, double r1[], double r2[], double dr[] );
-void initialize ( int np, int nd, double box[], int *seed, double pos[], 
+double pt_dist(int nd, int nppadded, double pos[], int p1, int p2, double dr[]);
+double min(double val[], int pos, double value);
+double f_calc(int nppadded, double dr[], double d[], double d2[], int i, int j, int k);
+void initialize ( int np, int nd, int nppadded, double box[], int *seed, double pos[],
   double vel[], double acc[] );
 double r8_uniform_01 ( int *seed );
 void timestamp ( void );
-void update ( int np, int nd, double pos[], double vel[], double f[], 
+void update ( int np, int nd, int nppadded, double pos[], double vel[], double f[],
   double acc[], double mass, double dt );
 void write_to_file(const int np, const int nd, int nppadded, double *acc,
   double *force, double *pos, double *vel, char *outfile);
@@ -46,7 +56,7 @@ int main ( int argc, char *argv[] )
 
   Modified:
 
-    4 October 2016
+    10 November 2016
 
   Author:
 
@@ -59,6 +69,8 @@ int main ( int argc, char *argv[] )
     None
 */
 {
+  const int divisor = ALIGNMENT>sizeof(double) ? ALIGNMENT / sizeof(double) : 1;
+  const int nppadded = (NP+divisor-1)/divisor * divisor;
   double *acc;
   double *box;
   double dt = 0.0001;
@@ -86,11 +98,11 @@ int main ( int argc, char *argv[] )
 
   proc_num = omp_get_num_procs ( );
 
-  acc = ( double * ) malloc ( nd * np * sizeof ( double ) );
-  box = ( double * ) malloc ( nd * sizeof ( double ) );
-  force = ( double * ) malloc ( nd * np * sizeof ( double ) );
-  pos = ( double * ) malloc ( nd * np * sizeof ( double ) );
-  vel = ( double * ) malloc ( nd * np * sizeof ( double ) );
+  acc = (double *) _mm_malloc(nd*nppadded * sizeof(double), ALIGNMENT);
+  box = (double *) malloc(nd * sizeof(double));
+  force = (double *) _mm_malloc(nd*nppadded * sizeof(double), ALIGNMENT);
+  pos = (double *) _mm_malloc(nd*nppadded * sizeof(double), ALIGNMENT);
+  vel = (double *) _mm_malloc(nd*nppadded * sizeof(double), ALIGNMENT);
 
   printf ( "\n" );
   printf ( "MD_OPENMP\n" );
@@ -111,6 +123,7 @@ int main ( int argc, char *argv[] )
     outfile = (char *) malloc(sizeof(char) * strlen(argv[1]));
     strcpy(outfile, argv[1]);
   }
+
 /*
   Set the dimensions of the box.
 */
@@ -124,14 +137,14 @@ int main ( int argc, char *argv[] )
 /*
   Set initial positions, velocities, and accelerations.
 */
-  initialize ( np, nd, box, &seed, pos, vel, acc );
+  initialize ( np, nd, nppadded, box, &seed, pos, vel, acc );
 /*
   Compute the forces and energies.
 */
   printf ( "\n" );
   printf ( "  Computing initial forces and energies.\n" );
 
-  compute ( np, nd, pos, vel, mass, force, &potential, &kinetic );
+  compute ( np, nd, nppadded, pos, vel, mass, force, &potential, &kinetic );
 
   e0 = potential + kinetic;
 /*
@@ -152,7 +165,7 @@ int main ( int argc, char *argv[] )
   step_print = 0;
   step_print_index = 0;
   step_print_num = 10;
-  
+
   step = 0;
   printf ( "  %8d  %14f  %14f  %14e\n",
     step, potential, kinetic, ( potential + kinetic - e0 ) / e0 );
@@ -163,7 +176,7 @@ int main ( int argc, char *argv[] )
 
   for ( step = 1; step <= step_num; step++ )
   {
-    compute ( np, nd, pos, vel, mass, force, &potential, &kinetic );
+    compute ( np, nd, nppadded, pos, vel, mass, force, &potential, &kinetic );
 
     if ( step == step_print )
     {
@@ -172,25 +185,24 @@ int main ( int argc, char *argv[] )
       step_print_index = step_print_index + 1;
       step_print = ( step_print_index * step_num ) / step_print_num;
     }
-    update ( np, nd, pos, vel, force, acc, mass, dt );
+    update ( np, nd, nppadded, pos, vel, force, acc, mass, dt );
   }
   wtime = omp_get_wtime ( ) - wtime;
 
   printf ( "\n" );
-  printf ( "  Elapsed time for main computation:\n" );
-  printf ( "  %f seconds.\n", wtime );
+  printf ( "  Elapsed seconds = %f\n", wtime );
 
   if (outfile != NULL){
     printf( "  Writting result to %s\n", outfile);
-    write_to_file(np, nd, np, acc, force, pos, vel, outfile);
+    write_to_file(np, nd, nppadded, acc, force, pos, vel, outfile);
     free(outfile);
   }
 
-  free ( acc );
-  free ( box );
-  free ( force );
-  free ( pos );
-  free ( vel );
+  _mm_free(acc);
+  free(box);
+  _mm_free(force);
+  _mm_free(pos);
+  _mm_free(vel);
 /*
   Terminate.
 */
@@ -205,7 +217,7 @@ int main ( int argc, char *argv[] )
 }
 /******************************************************************************/
 
-void compute ( int np, int nd, double pos[], double vel[], 
+void compute ( int np, int nd, const int nppadded, double pos[], double vel[],
   double mass, double f[], double *pot, double *kin )
 
 /******************************************************************************/
@@ -234,18 +246,21 @@ void compute ( int np, int nd, double pos[], double vel[],
 
   Modified:
 
-    21 November 2007
+    10 November 2016
 
   Author:
 
     Original FORTRAN77 version by Bill Magro.
     C version by John Burkardt.
+    OpenMP SIMD version by Christian Ponte.
 
   Parameters:
 
     Input, int NP, the number of particles.
 
     Input, int ND, the number of spatial dimensions.
+
+    Input, const int NPPADDED, NP padded to a multiple of ALIGNMENT.
 
     Input, double POS[ND*NP], the position of each particle.
 
@@ -260,71 +275,67 @@ void compute ( int np, int nd, double pos[], double vel[],
     Output, double *KIN, the total kinetic energy.
 */
 {
-  double d;
-  double d2;
+  double *d;
+  double *d2;
+  double *rij;
   int i;
   int j;
   int k;
   double ke;
   double pe;
   double PI2 = 3.141592653589793 / 2.0;
-  double rij[3];
 
   pe = 0.0;
   ke = 0.0;
 
-# pragma omp parallel \
+  # pragma omp parallel \
   shared ( f, nd, np, pos, vel ) \
   private ( i, j, k, rij, d, d2 )
-  
-
-# pragma omp for reduction ( + : pe, ke )
-  for ( k = 0; k < np; k++ )
   {
-/*
-  Compute the potential energy and forces.
-*/
-    for ( i = 0; i < nd; i++ )
+    d = (double *) _mm_malloc(nppadded * sizeof(double), ALIGNMENT);
+    d2 = (double *) _mm_malloc(nppadded * sizeof(double), ALIGNMENT);
+    rij = (double *) _mm_malloc(3*nppadded * sizeof(double), ALIGNMENT);
+
+    # pragma omp for reduction ( + : pe, ke )
+    for ( k = 0; k < np; k++ )
     {
-      f[i+k*nd] = 0.0;
-    }
+  /*
+    Compute the potential energy and forces.
+  */
+      # pragma omp simd reduction(+:pe) aligned(d:ALIGNMENT, pos:ALIGNMENT, rij:ALIGNMENT, d2:ALIGNMENT)
+      for (j=0; j<np; j++){
+        d[j] = pt_dist(nd, nppadded, pos, k, j, rij);
+        d2[j] = min(d, j, PI2);
+        /*
+          Attribute half of the potential energy to particle J.
+        */
+        pe += 0.5 * pow(sin(d2[j]), 2);
+      }
 
-    for ( j = 0; j < np; j++ )
-    {
-      if ( k != j )
-      {
-        d = dist ( nd, pos+k*nd, pos+j*nd, rij );
-/*
-  Attribute half of the potential energy to particle J.
-*/
-        if ( d < PI2 )
-        {
-          d2 = d;
-        }
-        else
-        {
-          d2 = PI2;
-        }
+      # pragma omp simd reduction(+:ke) aligned(f:ALIGNMENT, vel:ALIGNMENT)
+      for ( i = 0; i < nd; i++ ){
+        f[i*nppadded+k] = 0.0;
+        /*
+          Compute the kinetic energy.
+        */
+        ke += vel[i*nppadded+k] * vel[i*nppadded+k];
+      }
 
-        pe = pe + 0.5 * pow ( sin ( d2 ), 2 );
-
-        for ( i = 0; i < nd; i++ )
-        {
-          f[i+k*nd] = f[i+k*nd] - rij[i] * sin ( 2.0 * d2 ) / d;
+      for ( i = 0; i < nd; i++ ){
+        # pragma omp simd aligned(f:ALIGNMENT, rij:ALIGNMENT, d:ALIGNMENT, d2:ALIGNMENT)
+        for ( j = 0; j < np; j++ ){
+          f[i*nppadded+k] -= f_calc(nppadded, rij, d, d2, i, j, k);
         }
       }
     }
-/*
-  Compute the kinetic energy.
-*/
-    for ( i = 0; i < nd; i++ )
-    {
-      ke = ke + vel[i+k*nd] * vel[i+k*nd];
-    }
+
+    _mm_free(d);
+    _mm_free(d2);
+    _mm_free(rij);
   }
 
   ke = ke * 0.5 * mass;
-  
+
   *pot = pe;
   *kin = ke;
 
@@ -332,13 +343,15 @@ void compute ( int np, int nd, double pos[], double vel[],
 }
 /******************************************************************************/
 
-double dist ( int nd, double r1[], double r2[], double dr[] )
+# pragma omp declare simd notinbranch uniform(nd, nppadded, pos, dr, p1) linear(p2:1) \
+  aligned(pos:ALIGNMENT, dr:ALIGNMENT)
+double pt_dist(int nd, int nppadded, double pos[], int p1, int p2, double dr[])
 
 /******************************************************************************/
 /*
   Purpose:
 
-    DIST computes the displacement (and its norm) between two particles.
+    PT_DIST computes the displacement (and its norm) between two particles.
 
   Licensing:
 
@@ -346,18 +359,23 @@ double dist ( int nd, double r1[], double r2[], double dr[] )
 
   Modified:
 
-    21 November 2007
+    10 November 2016
 
   Author:
 
     Original FORTRAN77 version by Bill Magro.
     C version by John Burkardt.
+    OpenMP SIMD version by Christian Ponte.
 
   Parameters:
 
     Input, int ND, the number of spatial dimensions.
 
-    Input, double R1[ND], R2[ND], the positions of the particles.
+    Input, const int NPPADDED, NP padded to a multiple of ALIGNMENT. 
+
+    Input, double POS[], address of the position array.
+
+    Input, int P1, P2, offset of the particles inside the position array.
 
     Output, double DR[ND], the displacement vector.
 
@@ -370,17 +388,90 @@ double dist ( int nd, double r1[], double r2[], double dr[] )
   d = 0.0;
   for ( i = 0; i < nd; i++ )
   {
-    dr[i] = r1[i] - r2[i];
-    d = d + dr[i] * dr[i];
+    dr[i*nppadded+p2] = pos[i*nppadded+p1] - pos[i*nppadded+p2];
+    d = d + dr[i*nppadded+p2] * dr[i*nppadded+p2];
   }
-  d = sqrt ( d );
-
-  return d;
+  return sqrt(d);
 }
 /******************************************************************************/
 
-void initialize ( int np, int nd, double box[], int *seed, double pos[], 
-  double vel[], double acc[] )
+# pragma omp declare simd notinbranch uniform(val, value) linear(pos:1) \
+  aligned(val:ALIGNMENT)
+double min(double val[], int pos, double value)
+
+/******************************************************************************/
+/*
+  Purpose:
+
+    MIN calculates the minimum between two values.
+
+  Licensing:
+
+    This code is distributed under the GNU GPLv3 license. 
+
+  Modified:
+
+    10 November 2016
+
+  Author: Christian Ponte.
+
+  Parameters:
+
+    Input, double VAL[], the address of the value array.
+
+    Input, int POS, the offset of the value inside the array. 
+
+    Input, double VALUE, the second value to compare.
+
+    Output, double, the minimum between the two values.
+*/
+{
+  return val[pos] < value ? val[pos] : value;
+}
+/******************************************************************************/
+
+# pragma omp declare simd notinbranch uniform(nppadded, dr, d, d2, i, k) linear(j:1) \
+  aligned(dr:ALIGNMENT, d:ALIGNMENT, d2:ALIGNMENT)
+double f_calc(int nppadded, double dr[], double d[], double d2[], int i, int j, int k)
+/******************************************************************************/
+/*
+  Purpose:
+
+    F_CALC calculates the force induced by one particle onto another based on their
+    distance.
+
+  Licensing:
+
+    This code is distributed under the GNU GPLv3 license. 
+
+  Modified:
+
+    10 November 2016
+
+  Author: Christian Ponte.
+
+  Parameters:
+
+    Input, int NPPADDED, NP padded to a multiple of ALIGNMENT.
+
+    Input, double DR[ND], the displacement vector. 
+
+    Input, double d[NPPADDED], the distances vector.
+
+    Input, double d2[NPPADDED], the distances vector considering a distance threshold.
+
+    Input, int I, int J, int K, the dimension number and the two particles number.
+
+    Output, double, the resulting force.
+*/
+{
+  return j==k ? 0 : (dr[i*nppadded+j] * sin (2.0 * d2[j]) / d[j]);
+}
+
+/******************************************************************************/
+
+void initialize ( int np, int nd, int nppaddded, double box[], int *seed,
+  double pos[], double vel[], double acc[] )
 
 /******************************************************************************/
 /*
@@ -394,18 +485,21 @@ void initialize ( int np, int nd, double box[], int *seed, double pos[],
 
   Modified:
 
-    21 November 2007
+    10 November 2016
 
   Author:
 
     Original FORTRAN77 version by Bill Magro.
     C version by John Burkardt.
+    OpenMP SIMD version by Christian Ponte.
 
   Parameters:
 
     Input, int NP, the number of particles.
 
     Input, int ND, the number of spatial dimensions.
+
+    Input, const int NPPADDED, NP padded to a multiple of ALIGNMENT. 
 
     Input, double BOX[ND], specifies the maximum position
     of particles in each dimension.
@@ -428,22 +522,22 @@ void initialize ( int np, int nd, double box[], int *seed, double pos[],
   {
     for ( j = 0; j < np; j++ )
     {
-      pos[i+j*nd] = box[i] * r8_uniform_01 ( seed );
+      pos[i*nppaddded+j] = box[i] * r8_uniform_01 ( seed );
     }
   }
 
-  for ( j = 0; j < np; j++ )
+  for ( i = 0; i < nd; i++ )
   {
-    for ( i = 0; i < nd; i++ )
+    for ( j = 0; j < np; j++ )
     {
-      vel[i+j*nd] = 0.0;
+      vel[i*nppaddded+j] = 0.0;
     }
   }
-  for ( j = 0; j < np; j++ )
+  for ( i = 0; i < nd; i++ )
   {
-    for ( i = 0; i < nd; i++ )
+    for ( j = 0; j < np; j++ )
     {
-      acc[i+j*nd] = 0.0;
+      acc[i*nppaddded+j] = 0.0;
     }
   }
   return;
@@ -567,8 +661,8 @@ void timestamp ( void )
 }
 /******************************************************************************/
 
-void update ( int np, int nd, double pos[], double vel[], double f[], 
-  double acc[], double mass, double dt )
+void update ( int np, int nd, int nppadded, double pos[], double vel[],
+  double f[], double acc[], double mass, double dt )
 
 /******************************************************************************/
 /*
@@ -592,18 +686,21 @@ void update ( int np, int nd, double pos[], double vel[], double f[],
 
   Modified:
 
-    17 April 2009
+    10 November 2016
 
   Author:
 
     Original FORTRAN77 version by Bill Magro.
     C version by John Burkardt.
+    OpenMP SIMD version by Christian Ponte.
 
   Parameters:
 
     Input, int NP, the number of particles.
 
     Input, int ND, the number of spatial dimensions.
+
+    Input, const int NPPADDED, NP padded to a multiple of ALIGNMENT. 
 
     Input/output, double POS[ND*NP], the position of each particle.
 
@@ -629,13 +726,14 @@ void update ( int np, int nd, double pos[], double vel[], double f[],
   private ( i, j )
 
 # pragma omp for
-  for ( j = 0; j < np; j++ )
+  for ( i = 0; i < nd; i++ )
   {
-    for ( i = 0; i < nd; i++ )
+    # pragma omp simd aligned(pos:ALIGNMENT, vel:ALIGNMENT, acc:ALIGNMENT, f:ALIGNMENT)
+    for ( j = 0; j < np; j++ )
     {
-      pos[i+j*nd] = pos[i+j*nd] + vel[i+j*nd] * dt + 0.5 * acc[i+j*nd] * dt * dt;
-      vel[i+j*nd] = vel[i+j*nd] + 0.5 * dt * ( f[i+j*nd] * rmass + acc[i+j*nd] );
-      acc[i+j*nd] = f[i+j*nd] * rmass;
+      pos[i*nppadded+j] = pos[i*nppadded+j] + vel[i*nppadded+j] * dt + 0.5 * acc[i*nppadded+j] * dt * dt;
+      vel[i*nppadded+j] = vel[i*nppadded+j] + 0.5 * dt * ( f[i*nppadded+j] * rmass + acc[i*nppadded+j] );
+      acc[i*nppadded+j] = f[i*nppadded+j] * rmass;
     }
   }
 
