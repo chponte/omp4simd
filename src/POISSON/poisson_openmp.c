@@ -5,13 +5,21 @@
 # include <omp.h>
 # include <string.h>
 
+// Include appropiate library depending on compiler
+#if defined(__INTEL_COMPILER)
+# include <malloc.h>
+#else
+# include <mm_malloc.h>
+#endif
+
 #define NX 161
 #define NY 161
+#define ALIGNMENT 64
 
 int main ( int argc, char *argv[] );
-double r8mat_rms ( int nx, int ny, double *a );
-void rhs ( int nx, int ny, double *f );
-void sweep ( int nx, int ny, double dx, double dy, double *f,
+double r8mat_rms ( int nx, int ny, int npadded, double *a );
+void rhs ( int nx, int ny, int npadded, double *f );
+void sweep ( int nx, int ny, int npadded, double dx, double dy, double *f,
   int itold, int itnew, double *u, double *unew );
 void timestamp ( void );
 double u_exact ( double x, double y );
@@ -60,7 +68,7 @@ int main ( int argc, char *argv[] )
 
   Modified:
 
-    4 October 2016
+    10 November 2016
 
   Author:
 
@@ -68,12 +76,14 @@ int main ( int argc, char *argv[] )
     Christian Ponte
 */
 {
+  const int divisor = ALIGNMENT<sizeof(double) ? 1 : ALIGNMENT/sizeof(double);
+  const int npadded = (NY + divisor -1)/divisor * divisor;
   int converged;
   double diff;
   double dx;
   double dy;
   double error;
-  double *f = (double *) malloc(NX*NY*sizeof(double));
+  double *f = (double *) _mm_malloc(NX*npadded*sizeof(double), ALIGNMENT);
   int i;
   int id;
   int itnew;
@@ -82,16 +92,16 @@ int main ( int argc, char *argv[] )
   int nx = NX;
   int ny = NY;
   double tolerance = 0.000001;
-  double *u = (double *) malloc(NX*NY*sizeof(double));
+  double *u = (double *) _mm_malloc(NX*npadded*sizeof(double), ALIGNMENT);
   double u_norm;
-  double *udiff = (double *) malloc(NX*NY*sizeof(double));
-  double *uexact = (double *) malloc(NX*NY*sizeof(double));
-  double *unew = (double *) malloc(NX*NY*sizeof(double));
+  double *udiff = (double *) _mm_malloc(NX*npadded*sizeof(double), ALIGNMENT);
+  double *uexact = (double *) _mm_malloc(NX*npadded*sizeof(double), ALIGNMENT);
+  double *unew = (double *) _mm_malloc(NX*npadded*sizeof(double), ALIGNMENT);
   double unew_norm;
   double wtime;
   double x;
   double y;
-  char *outfile = NULL;
+  char * outfile = NULL;
 
   dx = 1.0 / ( double ) ( nx - 1 );
   dy = 1.0 / ( double ) ( ny - 1 );
@@ -130,42 +140,43 @@ int main ( int argc, char *argv[] )
     outfile = (char *) malloc(sizeof(char) * strlen(argv[1]));
     strcpy(outfile, argv[1]);
   }
+
 /*
   Set the right hand side array F.
 */
-  rhs ( nx, ny, f );
+  rhs ( nx, ny,npadded, f );
 /*
   Set the initial solution estimate UNEW.
   We are "allowed" to pick up the boundary conditions exactly.
 */
-  for ( j = 0; j < ny; j++ )
+  for ( i = 0; i < nx; i++ )
   {
-    for ( i = 0; i < nx; i++ )
+    for ( j = 0; j < ny; j++ )
     {
       if ( i == 0 || i == nx - 1 || j == 0 || j == ny - 1 )
       {
-        unew[i*ny+j] = f[i*ny+j];
+        unew[i*npadded+j] = f[i*npadded+j];
       }
       else
       {
-        unew[i*ny+j] = 0.0;
+        unew[i*npadded+j] = 0.0;
       }
     }
   }
-  unew_norm = r8mat_rms ( nx, ny, unew );
+  unew_norm = r8mat_rms ( nx, ny, npadded, unew );
 /*
   Set up the exact solution UEXACT.
 */
-  for ( j = 0; j < ny; j++ )
+  for ( i = 0; i < nx; i++ )
   {
-    y = ( double ) ( j ) / ( double ) ( ny - 1 );
-    for ( i = 0; i < nx; i++ )
+    x = ( double ) ( i ) / ( double ) ( nx - 1 );
+    for ( j = 0; j < ny; j++ )
     {
-      x = ( double ) ( i ) / ( double ) ( nx - 1 );
-      uexact[i*ny+j] = u_exact ( x, y );
+      y = ( double ) ( j ) / ( double ) ( ny - 1 );
+      uexact[i*npadded+j] = u_exact ( x, y );
     }
   }
-  u_norm = r8mat_rms ( nx, ny, uexact );
+  u_norm = r8mat_rms ( nx, ny, npadded, uexact );
   printf ( "  RMS of exact solution = %g\n", u_norm );
 /*
   Do the iteration.
@@ -176,14 +187,14 @@ int main ( int argc, char *argv[] )
   printf ( "  Step    ||Unew||     ||Unew-U||     ||Unew-Exact||\n" );
   printf ( "\n" );
 
-  for ( j = 0; j < ny; j++ )
+  for ( i = 0; i < nx; i++ )
   {
-    for ( i = 0; i < nx; i++ )
+    for ( j = 0; j < ny; j++ )
     {
-      udiff[i*ny+j] = unew[i*ny+j] - uexact[i*ny+j];
+      udiff[i*npadded+j] = unew[i*npadded+j] - uexact[i*npadded+j];
     }
   }
-  error = r8mat_rms ( nx, ny, udiff );
+  error = r8mat_rms ( nx, ny, npadded, udiff );
   printf ( "  %4d  %14g                  %14g\n", 0, unew_norm, error );
 
   wtime = omp_get_wtime ( );
@@ -198,32 +209,34 @@ int main ( int argc, char *argv[] )
   SWEEP carries out 500 Jacobi steps in parallel before we come
   back to check for convergence.
 */
-    sweep ( nx, ny, dx, dy, f, itold, itnew, u, unew );
+    sweep ( nx, ny, npadded, dx, dy, f, itold, itnew, u, unew );
 /*
   Check for convergence.
 */
     u_norm = unew_norm;
-    unew_norm = r8mat_rms ( nx, ny, unew );
+    unew_norm = r8mat_rms ( nx, ny, npadded, unew );
 
     # pragma omp parallel for shared(udiff, unew, u, nx, ny) private(i, j)
-    for ( j = 0; j < ny; j++ )
+    for ( i = 0; i < nx; i++ )
     {
-      for ( i = 0; i < nx; i++ )
+      # pragma omp simd aligned(udiff:ALIGNMENT, unew:ALIGNMENT, u:ALIGNMENT)
+      for ( j = 0; j < ny; j++ )
       {
-        udiff[i*ny+j] = unew[i*ny+j] - u[i*ny+j];
+        udiff[i*npadded+j] = unew[i*npadded+j] - u[i*npadded+j];
       }
     }
-    diff = r8mat_rms ( nx, ny, udiff );
+    diff = r8mat_rms ( nx, ny, npadded, udiff );
 
     # pragma omp parallel for shared(udiff, unew, uexact, nx, ny) private(i, j)
-    for ( j = 0; j < ny; j++ )
+    for ( i = 0; i < nx; i++ )
     {
-      for ( i = 0; i < nx; i++ )
+      # pragma omp simd aligned(udiff:ALIGNMENT, unew:ALIGNMENT, u:ALIGNMENT)
+      for ( j = 0; j < ny; j++ )
       {
-        udiff[i*ny+j] = unew[i*ny+j] - uexact[i*ny+j];
+        udiff[i*npadded+j] = unew[i*npadded+j] - uexact[i*npadded+j];
       }
     }
-    error = r8mat_rms ( nx, ny, udiff );
+    error = r8mat_rms ( nx, ny, npadded, udiff );
 
     printf ( "  %4d  %14g  %14g  %14g\n", itnew, unew_norm, diff, error );
 
@@ -250,17 +263,18 @@ int main ( int argc, char *argv[] )
 /*
   Terminate.
 */
+
   if (outfile != NULL){
     printf( "  Writting result to %s\n", outfile);
-    write_to_file(nx, ny, nx, unew, outfile);
+    write_to_file(nx, ny, npadded, unew, outfile);
     free(outfile);
   }
 
-  free(f);
-  free(u);
-  free(udiff);
-  free(uexact);
-  free(unew);
+  _mm_free(f);
+  _mm_free(u);
+  _mm_free(udiff);
+  _mm_free(uexact);
+  _mm_free(unew);
 
   printf ( "\n" );
   printf ( "POISSON_OPENMP:\n" );
@@ -272,7 +286,7 @@ int main ( int argc, char *argv[] )
 }
 /******************************************************************************/
 
-double r8mat_rms ( int nx, int ny, double *a )
+double r8mat_rms ( int nx, int ny, int npadded, double *a )
 
 /******************************************************************************/
 /*
@@ -286,7 +300,7 @@ double r8mat_rms ( int nx, int ny, double *a )
 
   Modified:
 
-    4 October 2016
+    10 November 2016
 
   Author:
 
@@ -296,6 +310,8 @@ double r8mat_rms ( int nx, int ny, double *a )
   Parameters:
 
     Input, int NX, NY, the number of rows and columns in A.
+
+    Input, int NPADDED, the width of the array padded to a multiple of ALIGNMENT.
 
     Input, double *A, the vector.
 
@@ -309,11 +325,12 @@ double r8mat_rms ( int nx, int ny, double *a )
   v = 0.0;
 
   # pragma omp parallel for shared(a) private(j,i) reduction(+:v)
-  for ( j = 0; j < ny; j++ )
+  for ( i = 0; i < nx; i++ )
   {
-    for ( i = 0; i < nx; i++ )
+    # pragma omp simd aligned(a:ALIGNMENT) reduction(+:v)
+    for ( j = 0; j < ny; j++ )
     {
-      v = v + a[i*ny+j] * a[i*ny+j];
+      v = v + a[i*npadded+j] * a[i*npadded+j];
     }
   }
   v = sqrt ( v / ( double ) ( nx * ny )  );
@@ -322,7 +339,7 @@ double r8mat_rms ( int nx, int ny, double *a )
 }
 /******************************************************************************/
 
-void rhs ( int nx, int ny, double *f )
+void rhs ( int nx, int ny, int npadded, double *f )
 
 /******************************************************************************/
 /*
@@ -358,7 +375,7 @@ void rhs ( int nx, int ny, double *f )
 
   Modified:
 
-    4 October 2016
+    10 November 2016
 
   Author:
 
@@ -368,6 +385,8 @@ void rhs ( int nx, int ny, double *f )
   Parameters:
 
     Input, int NX, NY, the X and Y grid dimensions.
+
+    Input, int NPADDED, the width of the array padded to a multiple of ALIGNMENT.
 
     Output, double *F, the initialized right hand side data.
 */
@@ -381,24 +400,24 @@ void rhs ( int nx, int ny, double *f )
   The "boundary" entries of F store the boundary values of the solution.
   The "interior" entries of F store the right hand sides of the Poisson equation.
 */
-  for ( j = 0; j < ny; j++ )
+  for ( i = 0; i < nx; i++ )
   {
-    y = ( double ) ( j ) / ( double ) ( ny - 1 );
-    for ( i = 0; i < nx; i++ )
+    x = ( double ) ( i ) / ( double ) ( nx - 1 );
+    for ( j = 0; j < ny; j++ )
     {
-      x = ( double ) ( i ) / ( double ) ( nx - 1 );
+      y = ( double ) ( j ) / ( double ) ( ny - 1 );
       if ( i == 0 || i == nx - 1 || j == 0 || j == ny - 1 )
       {
-        f[i*ny+j] = u_exact ( x, y );
+        f[i*npadded+j] = u_exact ( x, y );
       }
       else
       {
-        f[i*ny+j] = - uxxyy_exact ( x, y );
+        f[i*npadded+j] = - uxxyy_exact ( x, y );
       }
     }
   }
 
-  fnorm = r8mat_rms ( nx, ny, f );
+  fnorm = r8mat_rms ( nx, ny, npadded, f );
 
   printf ( "  RMS of F = %g\n", fnorm );
 
@@ -406,7 +425,7 @@ void rhs ( int nx, int ny, double *f )
 }
 /******************************************************************************/
 
-void sweep ( int nx, int ny, double dx, double dy, double *f,
+void sweep ( int nx, int ny, int npadded, double dx, double dy, double *f,
   int itold, int itnew, double *u, double *unew )
 
 /******************************************************************************/
@@ -436,7 +455,7 @@ void sweep ( int nx, int ny, double dx, double dy, double *f,
 
   Modified:
 
-    4 October 2016
+    10 November 2016
 
   Author:
 
@@ -446,6 +465,8 @@ void sweep ( int nx, int ny, double dx, double dy, double *f,
   Parameters:
 
     Input, int NX, NY, the X and Y grid dimensions.
+
+    Input, int NPADDED, the width of the array padded to a multiple of ALIGNMENT.
 
     Input, double DX, DY, the spacing between grid points.
 
@@ -476,33 +497,39 @@ void sweep ( int nx, int ny, double dx, double dy, double *f,
   Save the current estimate.
 */
 # pragma omp for
-    for ( j = 0; j < ny; j++ )
+    for ( i = 0; i < nx; i++ )
     {
-      for ( i = 0; i < nx; i++ )
+      # pragma omp simd aligned(u:ALIGNMENT, unew:ALIGNMENT)
+      for ( j = 0; j < ny; j++ )
       {
-        u[i*ny+j] = unew[i*ny+j];
+        u[i*npadded+j] = unew[i*npadded+j];
       }
     }
 /*
   Compute a new estimate.
 */
-# pragma omp for
-    for ( j = 0; j < ny; j++ )
-    {
-      for ( i = 0; i < nx; i++ )
-      {
-        if ( i == 0 || j == 0 || i == nx - 1 || j == ny - 1 )
-        {
-          unew[i*ny+j] = f[i*ny+j];
-        }
-        else
-        {
-          unew[i*ny+j] = 0.25 * (
-            u[(i-1)*ny+j] + u[i*ny+j+1] + u[i*ny+j-1] + u[(i+1)*ny+j] + f[i*ny+j] * dx * dy );
-        }
-      }
+
+    # pragma omp simd aligned(unew:ALIGNMENT, f:ALIGNMENT)
+    for (i=0; i<ny; i++){
+      unew[i] = f[i];
     }
 
+    # pragma omp simd aligned(unew:ALIGNMENT, f:ALIGNMENT)
+    for (i=0; i<ny; i++){
+      unew[(nx-1)*npadded + i] = f[(nx-1)*npadded + i];
+    }
+
+    # pragma omp for
+    for ( i = 1; i < nx-1; i++ )
+    {
+      unew[i*npadded] = f[i*npadded];
+      # pragma omp simd aligned(unew:ALIGNMENT, u:ALIGNMENT, f:ALIGNMENT)
+      for ( j = 1; j < ny-1; j++ )
+      {
+        unew[i*npadded+j] = 0.25 * ( u[(i-1)*npadded+j] + u[i*npadded+j+1] + u[i*npadded+j-1] + u[(i+1)*npadded+j] + f[i*npadded+j] * dx * dy );
+      }
+      unew[i*npadded + ny-1] = f[i*npadded + ny-1];
+    }
   }
   return;
 }
@@ -643,7 +670,7 @@ void write_to_file(const int nx, const int ny, int npadded, double *u, char *out
 
   Modified:
 
-    4 October 2016
+    10 November 2016
 
   Author:
 
