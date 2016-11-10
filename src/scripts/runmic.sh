@@ -4,12 +4,13 @@
 # $1: Xeon Phi address
 # $2: Path to folder containing all programs
 # $3: Path to results folder
-# $4: Label [Optional]
+# $4: Repetitions
+# $5: Label [Optional]
 
-if [ $# -lt 3 ]; then
+if [ $# -lt 4 ]; then
     echo "Missing args"
     echo "Usage: $0 <address> <path to program folder> \
-<path to results folder> [label]"
+<path to results folder> <repetitions per program> [label]"
     exit 0
 fi
 
@@ -88,7 +89,7 @@ fi
 
 # Print info associated with current execution
 if [ "x$3" != "x" ]; then
-    echo "[$1] $uni: $4" >> $3/$LOGFILE
+    echo "[$1] $uni: $5" >> $3/$LOGFILE
 else
     echo "[$1] $uni" >> $3/$LOGFILE
 fi
@@ -100,6 +101,6 @@ export -f mean standard_deviation results_to_csv
 # Run codes and extract results
 screen -S "runmic.sh $uni" -d -m bash -c \
     "ssh $1 \"export LD_LIBRARY_PATH=~/libs/mic && \
-        ~/bins/$uni/task.sh $uni ~/bins/$uni 10 ~/results/$uni results.out\" && \
+        ~/bins/$uni/task.sh $uni ~/bins/$uni $4 ~/results/$uni results.out\" && \
     scp -r $1:~/results/$uni $3 && \
-    results_to_csv ~/results/$uni/results.out $4 > ~/results/$uni/results.csv"
+    results_to_csv ~/results/$uni/results.out $5 > ~/results/$uni/results.csv"
