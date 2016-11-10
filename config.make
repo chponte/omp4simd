@@ -5,7 +5,7 @@ CC=/home/christian.ponte/compilers/intel/bin/icc
 CL=-L /home/christian.ponte/compilers/intel/lib/mic
 
 # Compilation flags
-CFLAGS=-mcmodel=medium -qopenmp -O2 -no-vec -mmic
+CFLAGS=-mcmodel=medium -qopenmp -O2 -mmic
 #-qopt-report=4 -qopt-report-phase=all -opt-report-file=stdout
 
 # Output directory
