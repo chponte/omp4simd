@@ -5,11 +5,19 @@
 # include <omp.h>
 # include <string.h>
 
+// Include appropiate library depending on compiler
+#if defined(__INTEL_COMPILER)
+#include <malloc.h>
+#else
+#include <mm_malloc.h>
+#endif
+
 # define N 1024
+# define ALIGNMENT 64
 
 int main ( int argc, char *argv[] );
 void timestamp ( void );
-void write_to_file(const int nwidth, double *array, char *outfile);
+void write_to_file(const int n, const int npadded, double *array, char *outfile);
 
 /******************************************************************************/
 
@@ -27,7 +35,7 @@ int main ( int argc, char *argv[] )
 
   Modified:
 
-    4 October 2016
+    10 November 2016
 
   Author:
 
@@ -35,10 +43,14 @@ int main ( int argc, char *argv[] )
     Christian Ponte
 */
 {
-  double *a = (double *) malloc(N*N*sizeof(double));
-  double angle;
+  const int divider = ALIGNMENT<sizeof(double) ? 1 : ALIGNMENT/sizeof(double);
+  const int npadded = (N+divider-1)/divider * divider;
+  double *a = (double *) _mm_malloc(N*N*sizeof(double), ALIGNMENT);
+  double *trans = (double *) _mm_malloc(N*N*sizeof(double), ALIGNMENT);
   double *b = (double *) malloc(N*N*sizeof(double));
   double *c = (double *) malloc(N*N*sizeof(double));
+  double angle;
+  double temp;
   int i;
   int j;
   int k;
@@ -63,6 +75,7 @@ int main ( int argc, char *argv[] )
   printf ( "  The number of threads available    = %d\n", thread_num );
 
   printf ( "  The matrix order N                 = %d\n", n );
+  printf ( "  Padded matrix order                = %d\n", npadded );
 
   if (argc > 1){
     outfile = (char *) malloc(sizeof(char) * strlen(argv[1]));
@@ -74,9 +87,7 @@ int main ( int argc, char *argv[] )
 */
   s = 1.0 / sqrt ( ( double ) ( n ) );
 
-  wtime = omp_get_wtime ( );
-
-# pragma omp parallel shared ( a, b, c, n, pi, s ) private ( angle, i, j, k )
+# pragma omp parallel shared ( wtime, a, b, c, npadded, pi, s ) private ( angle, i, j, k )
 {
   # pragma omp for
   for ( i = 0; i < n; i++ )
@@ -84,7 +95,7 @@ int main ( int argc, char *argv[] )
     for ( j = 0; j < n; j++ )
     {
       angle = 2.0 * pi * i * j / ( double ) n;
-      a[i*n+j] = s * ( sin ( angle ) + cos ( angle ) );
+      a[i*npadded+j] = s * ( sin ( angle ) + cos ( angle ) );
     }
   }
 /*
@@ -95,22 +106,38 @@ int main ( int argc, char *argv[] )
   {
     for ( j = 0; j < n; j++ )
     {
-      b[i*n+j] = a[i*n+j];
+      b[i*npadded+j] = a[i*npadded+j];
     }
   }
 /*
   Loop 3: Compute C = A * B.
 */
+
+  # pragma omp single
+  {
+    wtime = omp_get_wtime ( );
+  }
+
+  // First transpose B
+  # pragma omp for
+  for (i=0; i<n; i++){
+    for (j=0; j<n; j++){
+      trans[i*npadded+j] = b[j*npadded+i];
+    }
+  }
+
   # pragma omp for
   for ( i = 0; i < n; i++ )
   {
     for ( j = 0; j < n; j++ )
     {
-      c[i*n+j] = 0.0;
+      temp = 0;
+      # pragma omp simd aligned(a,trans:ALIGNMENT) reduction(+:temp)
       for ( k = 0; k < n; k++ )
       {
-        c[i*n+j] = c[i*n+j] + a[i*n+k] * b[k*n+j];
+        temp += a[i*npadded+k] * trans[j*npadded+k];
       }
+      c[i*npadded+j] = temp;
     }
   }
 
@@ -120,17 +147,13 @@ int main ( int argc, char *argv[] )
 
   if (outfile != NULL){
     printf( "  Writting result to %s\n", outfile);
-    write_to_file(n, c, outfile);
+    write_to_file(n, npadded, c, outfile);
     free(outfile);
   }
 
 /*
   Terminate.
 */
-  free(a);
-  free(b);
-  free(c);
-
   printf ( "\n" );
   printf ( "MXM_OPENMP:\n" );
   printf ( "  Normal end of execution.\n" );
@@ -189,7 +212,7 @@ void timestamp ( void )
 }
 /******************************************************************************/
 
-void write_to_file(const int nwidth, double *array, char *outfile)
+void write_to_file(const int n, const int npadded, double *array, char *outfile)
 
 /******************************************************************************/
 /*
@@ -203,7 +226,7 @@ void write_to_file(const int nwidth, double *array, char *outfile)
 
   Modified:
 
-    4 October 2016
+    10 November 2016
 
   Author:
 
@@ -211,7 +234,9 @@ void write_to_file(const int nwidth, double *array, char *outfile)
 
   Parameters:
 
-    Input, int nwidth, the size of the array.
+    Input, int N, the size of the array.
+
+    Input, int NPADDED, the width of the array padded to a multiple of ALIGNMENT.
 
     Input, double *array, the input array.
 
@@ -223,9 +248,9 @@ void write_to_file(const int nwidth, double *array, char *outfile)
   FILE *f = fopen(outfile, "w");
   if (f==NULL) return;
 
-  for (i=0; i<N; i++){
-    for (j=0; j<N; j++){
-      fprintf(f, "%f ", array[i*nwidth+j]);
+  for (i=0; i<n; i++){
+    for (j=0; j<n; j++){
+      fprintf(f, "%f ", array[i*npadded+j]);
     }
     fprintf(f, "\n");
   }
