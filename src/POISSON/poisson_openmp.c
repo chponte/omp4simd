@@ -56,7 +56,7 @@ int main ( int argc, char *argv[] )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU GPLv3 license. 
 
   Modified:
 
@@ -282,7 +282,7 @@ double r8mat_rms ( int nx, int ny, double *a )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license.
+    This code is distributed under the GNU GPLv3 license.
 
   Modified:
 
@@ -354,7 +354,7 @@ void rhs ( int nx, int ny, double *f )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license.
+    This code is distributed under the GNU GPLv3 license.
 
   Modified:
 
@@ -432,7 +432,7 @@ void sweep ( int nx, int ny, double dx, double dy, double *f,
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license.
+    This code is distributed under the GNU GPLv3 license.
 
   Modified:
 
@@ -522,7 +522,7 @@ void timestamp ( void )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license.
+    This code is distributed under the GNU GPLv3 license.
 
   Modified:
 
@@ -565,7 +565,7 @@ double u_exact ( double x, double y )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license.
+    This code is distributed under the GNU GPLv3 license.
 
   Modified:
 
@@ -602,7 +602,7 @@ double uxxyy_exact ( double x, double y )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license.
+    This code is distributed under the GNU GPLv3 license.
 
   Modified:
 
@@ -639,7 +639,7 @@ void write_to_file(const int nx, const int ny, int npadded, double *u, char *out
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU GPLv3 license. 
 
   Modified:
 

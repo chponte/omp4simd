@@ -1,5 +1,10 @@
 #!/bin/bash
 
+#*************************** Licensing ***************************
+# This code is distributed under the GNU GPLv3 license. 
+# Author: Christian Ponte Fernández
+# Modified: 10 November 2016
+
 #*************************** Arguments ***************************
 # $1: Id
 # $2: Binaries absolute path

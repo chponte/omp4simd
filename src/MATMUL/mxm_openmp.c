@@ -23,7 +23,7 @@ int main ( int argc, char *argv[] )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU GPLv3 license. 
 
   Modified:
 
@@ -156,7 +156,7 @@ void timestamp ( void )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU GPLv3 license. 
 
   Modified:
 
@@ -199,7 +199,7 @@ void write_to_file(const int nwidth, double *array, char *outfile)
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU GPLv3 license. 
 
   Modified:
 

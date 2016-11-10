@@ -42,7 +42,7 @@ int main ( int argc, char *argv[] )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU GPLv3 license. 
 
   Modified:
 
@@ -230,7 +230,7 @@ void compute ( int np, int nd, double pos[], double vel[],
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU GPLv3 license. 
 
   Modified:
 
@@ -342,7 +342,7 @@ double dist ( int nd, double r1[], double r2[], double dr[] )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU GPLv3 license. 
 
   Modified:
 
@@ -390,7 +390,7 @@ void initialize ( int np, int nd, double box[], int *seed, double pos[],
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU GPLv3 license. 
 
   Modified:
 
@@ -470,7 +470,7 @@ double r8_uniform_01 ( int *seed )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU GPLv3 license. 
 
   Modified:
 
@@ -533,7 +533,7 @@ void timestamp ( void )
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU GPLv3 license. 
 
   Modified:
 
@@ -588,7 +588,7 @@ void update ( int np, int nd, double pos[], double vel[], double f[],
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU GPLv3 license. 
 
   Modified:
 
@@ -654,7 +654,7 @@ void write_to_file(const int np, const int nd, int nppadded, double *acc,
 
   Licensing:
 
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU GPLv3 license. 
 
   Modified:
 
