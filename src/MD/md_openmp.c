@@ -177,8 +177,7 @@ int main ( int argc, char *argv[] )
   wtime = omp_get_wtime ( ) - wtime;
 
   printf ( "\n" );
-  printf ( "  Elapsed time for main computation:\n" );
-  printf ( "  %f seconds.\n", wtime );
+  printf ( "  Elapsed seconds = %f\n", wtime );
 
   if (outfile != NULL){
     printf( "  Writting result to %s\n", outfile);
