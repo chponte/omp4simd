@@ -12,8 +12,8 @@
 #include <mm_malloc.h>
 #endif
 
-# define ALIGNMENT 32
 # define NP 1024
+# define ALIGNMENT 64
 
 int main ( int argc, char *argv[] );
 void compute ( int np, int nd, const int nppadded, double pos[], double vel[],
