@@ -45,10 +45,10 @@ int main ( int argc, char *argv[] )
 {
   const int divider = ALIGNMENT<sizeof(double) ? 1 : ALIGNMENT/sizeof(double);
   const int npadded = (N+divider-1)/divider * divider;
-  double *a = (double *) _mm_malloc(N*N*sizeof(double), ALIGNMENT);
-  double *trans = (double *) _mm_malloc(N*N*sizeof(double), ALIGNMENT);
-  double *b = (double *) malloc(N*N*sizeof(double));
-  double *c = (double *) malloc(N*N*sizeof(double));
+  double *a = (double *) _mm_malloc(N*npadded*sizeof(double), ALIGNMENT);
+  double *trans = (double *) _mm_malloc(N*npadded*sizeof(double), ALIGNMENT);
+  double *b = (double *) malloc(N*npadded*sizeof(double));
+  double *c = (double *) malloc(N*npadded*sizeof(double));
   double angle;
   double temp;
   int i;
