@@ -138,9 +138,9 @@ int main ( int argc, char *argv[] )
   Set the initial solution estimate UNEW.
   We are "allowed" to pick up the boundary conditions exactly.
 */
-  for ( j = 0; j < ny; j++ )
+  for ( i = 0; i < nx; i++ )
   {
-    for ( i = 0; i < nx; i++ )
+    for ( j = 0; j < ny; j++ )
     {
       if ( i == 0 || i == nx - 1 || j == 0 || j == ny - 1 )
       {
@@ -156,10 +156,10 @@ int main ( int argc, char *argv[] )
 /*
   Set up the exact solution UEXACT.
 */
-  for ( j = 0; j < ny; j++ )
+  for ( i = 0; i < nx; i++ )
   {
     y = ( double ) ( j ) / ( double ) ( ny - 1 );
-    for ( i = 0; i < nx; i++ )
+    for ( j = 0; j < ny; j++ )
     {
       x = ( double ) ( i ) / ( double ) ( nx - 1 );
       uexact[i*ny+j] = u_exact ( x, y );
@@ -176,9 +176,9 @@ int main ( int argc, char *argv[] )
   printf ( "  Step    ||Unew||     ||Unew-U||     ||Unew-Exact||\n" );
   printf ( "\n" );
 
-  for ( j = 0; j < ny; j++ )
+  for ( i = 0; i < nx; i++ )
   {
-    for ( i = 0; i < nx; i++ )
+    for ( j = 0; j < ny; j++ )
     {
       udiff[i*ny+j] = unew[i*ny+j] - uexact[i*ny+j];
     }
@@ -206,9 +206,9 @@ int main ( int argc, char *argv[] )
     unew_norm = r8mat_rms ( nx, ny, unew );
 
     # pragma omp parallel for shared(udiff, unew, u, nx, ny) private(i, j)
-    for ( j = 0; j < ny; j++ )
+    for ( i = 0; i < nx; i++ )
     {
-      for ( i = 0; i < nx; i++ )
+      for ( j = 0; j < ny; j++ )
       {
         udiff[i*ny+j] = unew[i*ny+j] - u[i*ny+j];
       }
@@ -216,9 +216,9 @@ int main ( int argc, char *argv[] )
     diff = r8mat_rms ( nx, ny, udiff );
 
     # pragma omp parallel for shared(udiff, unew, uexact, nx, ny) private(i, j)
-    for ( j = 0; j < ny; j++ )
+    for ( i = 0; i < nx; i++ )
     {
-      for ( i = 0; i < nx; i++ )
+      for ( j = 0; j < ny; j++ )
       {
         udiff[i*ny+j] = unew[i*ny+j] - uexact[i*ny+j];
       }
@@ -309,9 +309,9 @@ double r8mat_rms ( int nx, int ny, double *a )
   v = 0.0;
 
   # pragma omp parallel for shared(a) private(j,i) reduction(+:v)
-  for ( j = 0; j < ny; j++ )
+  for ( i = 0; i < nx; i++ )
   {
-    for ( i = 0; i < nx; i++ )
+    for ( j = 0; j < ny; j++ )
     {
       v = v + a[i*ny+j] * a[i*ny+j];
     }
@@ -381,10 +381,10 @@ void rhs ( int nx, int ny, double *f )
   The "boundary" entries of F store the boundary values of the solution.
   The "interior" entries of F store the right hand sides of the Poisson equation.
 */
-  for ( j = 0; j < ny; j++ )
+  for ( i = 0; i < nx; i++ )
   {
     y = ( double ) ( j ) / ( double ) ( ny - 1 );
-    for ( i = 0; i < nx; i++ )
+    for ( j = 0; j < ny; j++ )
     {
       x = ( double ) ( i ) / ( double ) ( nx - 1 );
       if ( i == 0 || i == nx - 1 || j == 0 || j == ny - 1 )
@@ -476,9 +476,9 @@ void sweep ( int nx, int ny, double dx, double dy, double *f,
   Save the current estimate.
 */
 # pragma omp for
-    for ( j = 0; j < ny; j++ )
+    for ( i = 0; i < nx; i++ )
     {
-      for ( i = 0; i < nx; i++ )
+      for ( j = 0; j < ny; j++ )
       {
         u[i*ny+j] = unew[i*ny+j];
       }
@@ -487,9 +487,9 @@ void sweep ( int nx, int ny, double dx, double dy, double *f,
   Compute a new estimate.
 */
 # pragma omp for
-    for ( j = 0; j < ny; j++ )
+    for ( i = 0; i < nx; i++ )
     {
-      for ( i = 0; i < nx; i++ )
+      for ( j = 0; j < ny; j++ )
       {
         if ( i == 0 || j == 0 || i == nx - 1 || j == ny - 1 )
         {
