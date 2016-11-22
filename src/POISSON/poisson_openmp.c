@@ -12,8 +12,8 @@
 # include <mm_malloc.h>
 #endif
 
-#define NX 161
-#define NY 161
+#define NX 1024
+#define NY 1024
 #define ALIGNMENT 64
 
 int main ( int argc, char *argv[] );
@@ -230,7 +230,7 @@ int main ( int argc, char *argv[] )
     # pragma omp parallel for shared(udiff, unew, uexact, nx, ny) private(i, j)
     for ( i = 0; i < nx; i++ )
     {
-      # pragma omp simd aligned(udiff:ALIGNMENT, unew:ALIGNMENT, u:ALIGNMENT)
+      # pragma omp simd aligned(udiff:ALIGNMENT, unew:ALIGNMENT, uexact:ALIGNMENT)
       for ( j = 0; j < ny; j++ )
       {
         udiff[i*npadded+j] = unew[i*npadded+j] - uexact[i*npadded+j];
@@ -509,12 +509,12 @@ void sweep ( int nx, int ny, int npadded, double dx, double dy, double *f,
   Compute a new estimate.
 */
 
-    # pragma omp simd aligned(unew:ALIGNMENT, f:ALIGNMENT)
+    # pragma omp for simd aligned(unew:ALIGNMENT, f:ALIGNMENT)
     for (i=0; i<ny; i++){
       unew[i] = f[i];
     }
 
-    # pragma omp simd aligned(unew:ALIGNMENT, f:ALIGNMENT)
+    # pragma omp for simd aligned(unew:ALIGNMENT, f:ALIGNMENT)
     for (i=0; i<ny; i++){
       unew[(nx-1)*npadded + i] = f[(nx-1)*npadded + i];
     }
