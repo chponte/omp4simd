@@ -3,27 +3,26 @@
 #*************************** Licensing ***************************
 # This code is distributed under the GNU GPLv3 license. 
 # Author: Christian Ponte Fernández
-# Modified: 10 November 2016
+# Modified: 11 December 2016
 
 #*************************** Arguments ***************************
 # $1: Id
 # $2: Binaries absolute path
-# $3: Repetitions
-# $4: Results absolute path
-# $5: Output file name
+# $3: Thread number
+# $4: Repetitions
+# $5: Results absolute path
+# $6: Output file name
 
-if [ $# -lt 4 ]; then
+if [ $# -lt 6 ]; then
     echo "Missing args"
     echo "Usage: $0 <id> <binaries path> \
-<repetitions> <path to results folder> <output file>"
+<thread number> <repetitions> <path to results folder> <output file>"
     exit 0
 fi
 
 #************************** Definitions **************************
 # Scratch directory
-SCRATCH_DIR="/home/christian.ponte/scratch"
-# Thread number
-THREAD_NUMBER="180"
+SCRATCH_DIR="$HOME/scratch"
 
 # Auxiliary function
 # Arguments: $1-repetitions $2-executable
@@ -54,7 +53,7 @@ cd $SCRATCH_DIR/$1
 ulimit -s unlimited
 
 # Set thread number
-export OMP_NUM_THREADS=$THREAD_NUMBER
+export OMP_NUM_THREADS=$3
 # Disable thread migration
 export OMP_PLACES="cores"
 export OMP_PROC_BIND="true"
@@ -62,7 +61,7 @@ export OMP_PROC_BIND="true"
 # For each executable
 filecount=$(find $2 | wc -l)
 for exec in $(find $2 | tail -n $((filecount-1)) | grep -v "$0$"); do
-    echo "$exec $THREAD_NUMBER $(repeat_execution $3 $exec)"
+    echo "$exec $3 $(repeat_execution $4 $exec)"
 done
 
-} 1>$4/$5 2>"$4/error.log"
+} 1>$5/$6 2>"$5/error.log"
