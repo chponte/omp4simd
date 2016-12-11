@@ -108,4 +108,4 @@ screen -S "runmic.sh $uni" -d -m bash -c \
     "ssh $1 \"export LD_LIBRARY_PATH=~/libs/mic && \
         ~/bins/$uni/task.sh $uni ~/bins/$uni $4 ~/results/$uni results.out\" && \
     scp -r $1:~/results/$uni $3 && \
-    results_to_csv ~/results/$uni/results.out \"$5\" > ~/results/$uni/results.csv"
+    results_to_csv $3/$uni/results.out \"$5\" > $3/$uni/results.csv"
