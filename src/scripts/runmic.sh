@@ -3,19 +3,20 @@
 #*************************** Licensing ***************************
 # This code is distributed under the GNU GPLv3 license. 
 # Author: Christian Ponte Fernández
-# Modified: 10 November 2016
+# Modified: 11 December 2016
 
 #*************************** Arguments ***************************
 # $1: Xeon Phi address
 # $2: Path to folder containing all programs
 # $3: Path to results folder
-# $4: Repetitions
-# $5: Label [Optional]
+# $4: Thread number
+# $5: Repetitions
+# $6: Label [Optional]
 
-if [ $# -lt 4 ]; then
+if [ $# -lt 5 ]; then
     echo "Missing args"
     echo "Usage: $0 <address> <path to program folder> \
-<path to results folder> <repetitions per program> [label]"
+<path to results folder> <thread number> <repetitions per program> [label]"
     exit 0
 fi
 
@@ -82,7 +83,7 @@ fi
 findcount=$(find $2 | wc -l)
 ssh $1 "mkdir -p ~/bins/$uni && mkdir -p ~/results/$uni" && \
     scp $(find $2 | tail -n $((findcount-1))) $1:~/bins/$uni/ && \
-    scp $TASK $1:~/bins/$uni/
+    scp $TASK $1:~/bins/$uni/task.sh
 
 # Check if any library is missing
 locallibs=$(ls $LIB_PATH | sort | tr -d '\n')
@@ -94,7 +95,7 @@ fi
 
 # Print info associated with current execution
 if [ "x$3" != "x" ]; then
-    echo "[$1] $uni: $5" >> $3/$LOGFILE
+    echo "[$1] $uni: $6" >> $3/$LOGFILE
 else
     echo "[$1] $uni" >> $3/$LOGFILE
 fi
@@ -106,6 +107,6 @@ export -f mean standard_deviation results_to_csv
 # Run codes and extract results
 screen -S "runmic.sh $uni" -d -m bash -c \
     "ssh $1 \"export LD_LIBRARY_PATH=~/libs/mic && \
-        ~/bins/$uni/task.sh $uni ~/bins/$uni $4 ~/results/$uni results.out\" && \
+        ~/bins/$uni/task.sh $uni ~/bins/$uni $4 $5 ~/results/$uni results.out\" && \
     scp -r $1:~/results/$uni $3 && \
-    results_to_csv $3/$uni/results.out \"$5\" > $3/$uni/results.csv"
+    results_to_csv $3/$uni/results.out \"$6\" > $3/$uni/results.csv"
