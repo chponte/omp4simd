@@ -4,6 +4,13 @@
 
 This repository contains the source code for all the benchmarks used in the study as well as the scripts utilized for the results gathering.
 
+
+#### Download
+
+Two different versions of the codes can be found under releases:
+* Non-vectorized version: [zip](https://github.com/christianponte/omp4simd/archive/novec-v1.0.zip) [tar.gz](https://github.com/christianponte/omp4simd/archive/novec-v1.0.tar.gz).
+* OpenMP SIMD version: [zip](https://github.com/christianponte/omp4simd/archive/simd-v1.0.zip) [tar.gz](https://github.com/christianponte/omp4simd/archive/simd-v1.0.tar.gz).
+
 #### Compilation
 
 After downloading the appropiate version of the codes, a configuration needs to be used. Replace the `config.make` configuration with one of the configuration templates from the configs folder, and adapt it to your needs. Lastly, run make to generate the binary files.
@@ -17,13 +24,18 @@ $ make
 
 #### Usage
 
-You can either copy the generated  binaries onto the Intel Xeon Phi and manually execute them or use the scripts included in the src/scripts folder to automatice the result gathering.
+You can either copy the generated  binaries onto the Intel Xeon Phi and manually execute them or use the scripts included in the src/scripts folder to automatice execution and result gathering.
 
-In order to use the scripts, `screen` needs to be installed on your system. Before running any of them, it is necessary to adapt the definitions included in each file to your system. After all the changes are done, simply run `src/scripts/runmic.sh`. The usage is as follows: `./runmic.sh <address> <path to program folder> <path to results folder> <repetitions per program> [label]`. You can check wether the execution is still in progress by running `screen -ls`. Results are obtained in `csv` format, ready to be imported into a spreadsheet.
+Scripts requirements:
+* `screen` needs to be installed on your system. 
+* Public key authentication is also necessary when connecting to the Intel MIC through ssh.
+* Definitions adaptation inside `runmic.sh`.
+
+Given the correct arguments, `runmic.sh` executes all the programs contained on the specified folder in the device with the given address, using the amount of threads requested. Each program execution is repeated several times, and its runtime is averaged for a better overview of the results. They are obtained in a `csv` file under the results folder. The usage is as follows: `./runmic.sh <address> <path to program folder> <path to results folder> <thread number> <repetitions per program> [label]`. You can check wether the execution is still in progress by running `screen -ls`.
 
 ```bash
 $ cd omp4simd
-$ src/scripts/runmic.sh 0.0.0.0 bin/ results/ 10 "default execution"
+$ src/scripts/runmic.sh 0.0.0.0 bin/ results/ 180 10 "default execution"
 $ screen -ls
 ```
 
@@ -41,8 +53,6 @@ task.sh
 ```bash
 # Scratch directory
 SCRATCH_DIR=path_to_scratch_directory
-# Thread number
-THREAD_NUMBER=number_of_threads_during_execution
 ```
 
 #### Help
